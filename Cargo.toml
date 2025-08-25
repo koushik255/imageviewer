@@ -1,0 +1,16 @@
+[package]
+name = "imageviewer"
+version = "0.1.0"
+description = "view images in your terminal!"
+authors = ["koushik <191687017+koushik255@users.noreply.github.com>"]
+license = "MIT"
+edition = "2024"
+
+[dependencies]
+crossterm = { version = "0.28.1", features = ["event-stream"] }
+futures = "0.3.31"
+ratatui = "0.29.0"
+tokio = { version = "1.40.0", features = ["full"] }
+color-eyre = "0.6.3"
+ratatui-image = "8.0.1"
+image = "0.25.6"
