@@ -1,9 +1,11 @@
 use ratatui::prelude::StatefulWidget;
+use ratatui::widgets::ListItem;
 use ratatui::{
+    Frame,
     buffer::Buffer,
     layout::{Alignment, Constraint, Direction, Layout, Rect},
-    style::{Color, Stylize},
-    widgets::{Block, BorderType, Paragraph, Widget},
+    style::{Color, Style, Stylize},
+    widgets::{Block, BorderType, List, ListState, Paragraph, Widget},
 };
 
 use ratatui_image::StatefulImage;
@@ -19,7 +21,7 @@ impl Widget for &mut App {
     // - https://github.com/ratatui/ratatui/tree/master/examples
     fn render(self, area: Rect, buf: &mut Buffer) {
         let block = Block::bordered()
-            .title("imageviewer")
+            .title("{self.dir_list}")
             .title_alignment(ratatui::layout::Alignment::Center)
             .border_type(BorderType::Rounded);
 
@@ -27,11 +29,36 @@ impl Widget for &mut App {
             .direction(Direction::Vertical)
             .margin(1)
             .constraints([
-                Constraint::Length(5),
+                Constraint::Min(5),
                 Constraint::Min(10),
                 Constraint::Length(7),
             ])
             .split(area);
+
+        let items1: Vec<ListItem> = self
+            .dir_list
+            .iter()
+            .map(|path| {
+                let display = path
+                    .file_name()
+                    .and_then(|os_str| os_str.to_str())
+                    .unwrap_or("InvalidUTD()");
+
+                ListItem::new(display.to_string())
+            })
+            .collect();
+
+        //let mut llstate = ListState::default();
+        let list = List::new(items1)
+            .block(Block::bordered().title("List"))
+            .highlight_style(Style::new().reversed())
+            .highlight_symbol(">>")
+            .repeat_highlight_symbol(true);
+
+        //frame.render_stateful_widget(list, area, &mut state);
+        //frame.render_stateful_widget(chunks[0], buf, &mut llstate);
+        //list.render(chunks[0], buf, &mut llstate);
+        StatefulWidget::render(list, chunks[0], buf, &mut self.list_state);
 
         let text = format!(
             "This is a tui template.\n\
@@ -61,10 +88,11 @@ impl Widget for &mut App {
             .bg(Color::Black)
             .centered();
 
-        paragraph.render(chunks[0], buf);
-        dir_listing_para.render(chunks[2], buf);
+        paragraph.render(chunks[2], buf);
+        // dir_listing_para.render(chunks[2], buf);
 
         image_block.render(chunks[1], buf);
+
         StatefulImage::default().render(inner, buf, &mut self.image);
         //image_space.render(inner, buf, &mut self.image);
     }

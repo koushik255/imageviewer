@@ -1,3 +1,4 @@
+use ratatui::widgets::ListState;
 use ratatui_image::thread::{ResizeRequest, ThreadProtocol};
 use rayon::spawn;
 use std::fs;
@@ -34,6 +35,8 @@ pub struct App {
     pub prev_photo: usize,
     pub worker_tx: mpsc::Sender<ResizeRequest>,
     pub main_rx: mpsc::Receiver<AppEvent>,
+    pub selected: usize,
+    pub list_state: ListState,
     //pub photo_to_su::how: ,
 }
 
@@ -90,11 +93,14 @@ impl App {
             prev_photo: 0,
             worker_tx,
             main_rx,
+            selected: 0,
+            list_state: ListState::default(),
         }
     }
 
     /// Run the application's main loop.
     pub async fn run(mut self, mut terminal: DefaultTerminal) -> color_eyre::Result<()> {
+        self.list_dir_into_text();
         while self.running {
             terminal.draw(|frame| {
                 let area = frame.area();
@@ -204,6 +210,7 @@ impl App {
 
     pub fn list_dir_into_text(&mut self) {
         let stuff = self.show_dir().unwrap();
+        self.dir_list = stuff.clone();
 
         self.increment_counter();
         self.list_of_here = stuff.clone();
