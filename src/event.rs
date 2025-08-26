@@ -1,6 +1,7 @@
 use color_eyre::eyre::OptionExt;
 use futures::{FutureExt, StreamExt};
 use ratatui::crossterm::event::Event as CrosstermEvent;
+use ratatui_image::thread::ResizeResponse;
 use std::time::Duration;
 use tokio::sync::mpsc;
 
@@ -8,7 +9,7 @@ use tokio::sync::mpsc;
 const TICK_FPS: f64 = 30.0;
 
 /// Representation of all possible events.
-#[derive(Clone, Debug)]
+//#[derive(Clone, Debug)]
 pub enum Event {
     /// An event that is emitted on a regular schedule.
     ///
@@ -29,7 +30,7 @@ pub enum Event {
 /// Application events.
 ///
 /// You can extend this enum with your own custom events.
-#[derive(Clone, Debug)]
+//#[derive(Clone,Debug)]
 pub enum AppEvent {
     /// Increment the counter.
     Increment,
@@ -41,6 +42,7 @@ pub enum AppEvent {
     DirList,
     UpImage,
     DownImage,
+    ImageReady(Result<ResizeResponse, ratatui_image::errors::Errors>),
 }
 
 /// Terminal event handler.

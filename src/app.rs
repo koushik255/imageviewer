@@ -1,9 +1,9 @@
-use ratatui_image::StatefulImage;
-use ratatui_image::protocol::StatefulProtocol;
+use ratatui_image::thread::{ResizeRequest, ThreadProtocol};
+use rayon::spawn;
 use std::fs;
 use std::io;
 use std::path::PathBuf;
-use tokio::task;
+use std::sync::mpsc;
 
 use crate::event::{AppEvent, Event, EventHandler};
 use ratatui::{
@@ -24,7 +24,7 @@ pub struct App {
     /// Event handler.
     pub events: EventHandler,
     pub dir_list: Vec<PathBuf>,
-    pub image: StatefulProtocol,
+    pub image: ThreadProtocol,
     pub picker: Picker,
     pub photo_count: usize,
     pub current_photo: usize,
@@ -32,7 +32,9 @@ pub struct App {
     pub list_of_here: Vec<PathBuf>,
     pub next_photo: usize,
     pub prev_photo: usize,
-    //pub photo_to_show: ,
+    pub worker_tx: mpsc::Sender<ResizeRequest>,
+    pub main_rx: mpsc::Receiver<AppEvent>,
+    //pub photo_to_su::how: ,
 }
 
 impl Default for App {
@@ -47,19 +49,38 @@ impl App {
         let mut picker = Picker::from_query_stdio().unwrap();
         picker.set_background_color([0, 0, 0, 255]);
 
+        let (worker_tx, worker_rx) = mpsc::channel::<ResizeRequest>();
+        let (main_tx, main_rx) = mpsc::channel();
+
         let dyn_img = image::ImageReader::open("./assets/painaura.jpeg")
             .unwrap()
             .decode()
             .unwrap();
 
-        let protocol = picker.new_resize_protocol(dyn_img);
+        //12 + enum = 14
+
+        let main_tx_clone = main_tx.clone();
+
+        std::thread::spawn(move || {
+            while let Ok(request) = worker_rx.recv() {
+                let main_tx_clone = main_tx_clone.clone();
+
+                // putting the hard work into a rayon spawn
+                spawn(move || {
+                    let result = request.resize_encode();
+                    main_tx_clone.send(AppEvent::ImageReady(result)).unwrap();
+                });
+            }
+        });
+
+        let initial_protocol = picker.new_resize_protocol(dyn_img);
 
         Self {
             running: true,
             counter: 0,
             events: EventHandler::new(),
             dir_list: Vec::new(),
-            image: protocol,
+            image: ThreadProtocol::new(worker_tx.clone(), Some(initial_protocol)),
             picker,
             photo_count: 0,
             current_photo: 0,
@@ -67,6 +88,8 @@ impl App {
             list_of_here: Vec::new(),
             next_photo: 0,
             prev_photo: 0,
+            worker_tx,
+            main_rx,
         }
     }
 
@@ -79,6 +102,15 @@ impl App {
                 //frame.render_stateful_widget(image_widget, area, &mut self.image);
                 frame.render_widget(&mut self, area);
             })?;
+
+            // checking for results (non-blocking)
+            // do it here instead of the match
+            // 2
+            if let Ok(AppEvent::ImageReady(Ok(response))) = self.main_rx.try_recv() {
+                //<-- main thread receives resized image result
+                let _ = self.image.update_resized_protocol(response);
+                // ->> updates threaProtocol with new resized image
+            }
 
             match self.events.next().await? {
                 Event::Tick => self.tick(),
@@ -94,6 +126,7 @@ impl App {
                     AppEvent::DirList => self.list_dir_into_text(),
                     AppEvent::UpImage => self.go_up_image().await,
                     AppEvent::DownImage => self.go_down_image().await,
+                    AppEvent::ImageReady(_) => {}
                 },
             }
         }
@@ -171,61 +204,48 @@ impl App {
 
     pub fn list_dir_into_text(&mut self) {
         let stuff = self.show_dir().unwrap();
-        //self.dir_list = stuff.clone()
+
         self.increment_counter();
         self.list_of_here = stuff.clone();
     }
 
     pub fn one_by_one(&mut self) -> std::path::PathBuf {
-        //let list_of_photos = self.show_dir().unwrap();
-        // self.photo_count = list_of_photos.len();
         self.photo_count = self.list_of_here.len();
         // i only want to call the 2 functions above me once,
         // for now just click 'l' first before doing other stuff
 
         let c_p = self.current_photo;
 
-        // list_of_photos[c_p].clone()
         self.list_of_here[c_p].clone()
     }
 
     pub async fn go_up_image(&mut self) {
         self.current_photo += 1;
-        self.load_new_image_async().await;
-        //self.load_new_image();
+        self.load_new_image_thread().await;
     }
 
     pub async fn go_down_image(&mut self) {
         self.current_photo -= 1;
-        self.load_new_image_async().await;
-        //self.load_new_image();
+        self.load_new_image_thread().await;
     }
 
     pub fn show_image_screen(&mut self) -> Result<(), Box<dyn std::error::Error>> {
         Ok(())
     }
 
-    pub fn load_new_image(&mut self) {
-        let img = self.one_by_one();
-        self.filename = img.clone();
+    pub async fn load_new_image_thread(&mut self) {
+        let img_path = self.one_by_one();
+        self.filename = img_path.clone();
 
-        let dyn_img = image::ImageReader::open(img).unwrap().decode().unwrap();
+        let dyn_img = image::ImageReader::open(img_path)
+            .unwrap()
+            .decode()
+            .unwrap();
 
-        self.image = self.picker.new_resize_protocol(dyn_img)
-    }
-
-    pub async fn load_new_image_async(&mut self) {
-        let img = self.one_by_one().clone();
-        self.filename = img.clone();
-
-        let picker = self.picker.clone();
-        let result = task::spawn_blocking(move || {
-            let dyn_img = image::ImageReader::open(&img).unwrap().decode().unwrap();
-            picker.new_resize_protocol(dyn_img)
-        })
-        .await
-        .unwrap();
-        self.image = result;
+        //2
+        let protocol = self.picker.new_resize_protocol(dyn_img);
+        self.image = ThreadProtocol::new(self.worker_tx.clone(), Some(protocol));
+        // sends resize request to woker via worker_tx
     }
 
     // before adding more things i want to try and make it faster

@@ -45,7 +45,7 @@ impl Widget for &mut App {
             .border_type(BorderType::Rounded);
         let inner = image_block.inner(chunks[1]);
 
-        let image_space = StatefulImage::default();
+        // let image_space = StatefulImage::default();
 
         let directory_listing = format!("{:?}", self.dir_list);
 
@@ -63,7 +63,9 @@ impl Widget for &mut App {
 
         paragraph.render(chunks[0], buf);
         dir_listing_para.render(chunks[2], buf);
+
         image_block.render(chunks[1], buf);
-        image_space.render(inner, buf, &mut self.image);
+        StatefulImage::default().render(inner, buf, &mut self.image);
+        //image_space.render(inner, buf, &mut self.image);
     }
 }
