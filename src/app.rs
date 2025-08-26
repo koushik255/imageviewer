@@ -3,6 +3,7 @@ use ratatui_image::protocol::StatefulProtocol;
 use std::fs;
 use std::io;
 use std::path::PathBuf;
+use tokio::task;
 
 use crate::event::{AppEvent, Event, EventHandler};
 use ratatui::{
@@ -28,6 +29,9 @@ pub struct App {
     pub photo_count: usize,
     pub current_photo: usize,
     pub filename: PathBuf,
+    pub list_of_here: Vec<PathBuf>,
+    pub next_photo: usize,
+    pub prev_photo: usize,
     //pub photo_to_show: ,
 }
 
@@ -60,6 +64,9 @@ impl App {
             photo_count: 0,
             current_photo: 0,
             filename: PathBuf::new(),
+            list_of_here: Vec::new(),
+            next_photo: 0,
+            prev_photo: 0,
         }
     }
 
@@ -85,8 +92,8 @@ impl App {
                     AppEvent::Double => self.double_counter(),
                     AppEvent::Quit => self.quit(),
                     AppEvent::DirList => self.list_dir_into_text(),
-                    AppEvent::UpImage => self.go_up_image(),
-                    AppEvent::DownImage => self.go_down_image(),
+                    AppEvent::UpImage => self.go_up_image().await,
+                    AppEvent::DownImage => self.go_down_image().await,
                 },
             }
         }
@@ -156,6 +163,7 @@ impl App {
         //.collect();
 
         images.sort();
+        self.increment_counter();
 
         //entries.sort();
         Ok(images)
@@ -163,27 +171,34 @@ impl App {
 
     pub fn list_dir_into_text(&mut self) {
         let stuff = self.show_dir().unwrap();
-        self.dir_list = stuff;
+        //self.dir_list = stuff.clone()
+        self.increment_counter();
+        self.list_of_here = stuff.clone();
     }
 
     pub fn one_by_one(&mut self) -> std::path::PathBuf {
-        let list_of_photos = self.show_dir().unwrap();
-        self.photo_count = list_of_photos.len();
+        //let list_of_photos = self.show_dir().unwrap();
+        // self.photo_count = list_of_photos.len();
+        self.photo_count = self.list_of_here.len();
         // i only want to call the 2 functions above me once,
+        // for now just click 'l' first before doing other stuff
 
         let c_p = self.current_photo;
 
-        list_of_photos[c_p].clone()
+        // list_of_photos[c_p].clone()
+        self.list_of_here[c_p].clone()
     }
 
-    pub fn go_up_image(&mut self) {
+    pub async fn go_up_image(&mut self) {
         self.current_photo += 1;
-        self.load_new_image();
+        self.load_new_image_async().await;
+        //self.load_new_image();
     }
 
-    pub fn go_down_image(&mut self) {
+    pub async fn go_down_image(&mut self) {
         self.current_photo -= 1;
-        self.load_new_image();
+        self.load_new_image_async().await;
+        //self.load_new_image();
     }
 
     pub fn show_image_screen(&mut self) -> Result<(), Box<dyn std::error::Error>> {
@@ -192,11 +207,26 @@ impl App {
 
     pub fn load_new_image(&mut self) {
         let img = self.one_by_one();
-        let file = self.one_by_one();
-        self.filename = file;
+        self.filename = img.clone();
 
         let dyn_img = image::ImageReader::open(img).unwrap().decode().unwrap();
 
         self.image = self.picker.new_resize_protocol(dyn_img)
     }
+
+    pub async fn load_new_image_async(&mut self) {
+        let img = self.one_by_one().clone();
+        self.filename = img.clone();
+
+        let picker = self.picker.clone();
+        let result = task::spawn_blocking(move || {
+            let dyn_img = image::ImageReader::open(&img).unwrap().decode().unwrap();
+            picker.new_resize_protocol(dyn_img)
+        })
+        .await
+        .unwrap();
+        self.image = result;
+    }
+
+    // before adding more things i want to try and make it faster
 }
