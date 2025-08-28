@@ -55,9 +55,6 @@ impl Widget for &mut App {
             .highlight_symbol(">>")
             .repeat_highlight_symbol(true);
 
-        //frame.render_stateful_widget(list, area, &mut state);
-        //frame.render_stateful_widget(chunks[0], buf, &mut llstate);
-        //list.render(chunks[0], buf, &mut llstate);
         StatefulWidget::render(list, chunks[0], buf, &mut self.list_state);
 
         let text = format!(
@@ -71,8 +68,6 @@ impl Widget for &mut App {
             .title_alignment(Alignment::Center)
             .border_type(BorderType::Rounded);
         let inner = image_block.inner(chunks[1]);
-
-        // let image_space = StatefulImage::default();
 
         let directory_listing = format!("{:?}", self.dir_list);
 

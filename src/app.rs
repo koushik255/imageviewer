@@ -257,3 +257,4 @@ impl App {
 
     // before adding more things i want to try and make it faster
 }
+
